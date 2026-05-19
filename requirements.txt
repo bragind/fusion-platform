@@ -1,1 +1,3 @@
-pip install nats-py
+nats-py
+fastapi
+uvicorn
