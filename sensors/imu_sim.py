@@ -31,7 +31,7 @@ async def main():
             gyro_z = omega + random.gauss(0, 0.01)
 
             message = {
-                "timestamp": t,
+                "timestamp": time.time(),
                 "accel_x": accel_x,
                 "accel_y": accel_y,
                 "accel_z": accel_z,
