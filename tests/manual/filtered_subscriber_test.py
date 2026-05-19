@@ -1,0 +1,16 @@
+import asyncio
+from nats.aio.client import Client as NATS
+
+async def main():
+    nc = NATS()
+    await nc.connect("nats://localhost:4222")
+    async def handler(msg):
+        print(f"Filtered: {msg.data.decode()}")
+    await nc.subscribe("filtered.sync", cb=handler)
+    print("Listening for filtered sync packets...")
+    while True:
+        await asyncio.sleep(1)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
