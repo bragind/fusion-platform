@@ -39,7 +39,7 @@ async def main():
             eph = 3.0
 
             message = {
-                "timestamp": t,
+                "timestamp": time.time(),
                 "lat": lat,
                 "lon": lon,
                 "alt": alt,
