@@ -8,7 +8,7 @@ async def main():
     async def message_handler(msg):
         print(f"Received: {msg.data.decode()}")
 
-    await nc.subscribe("sensor.imu", cb=message_handler)
+    await nc.subscribe("sensor.gps", cb=message_handler)
     print("Listening for IMU data...")
     while True:
         await asyncio.sleep(1)
