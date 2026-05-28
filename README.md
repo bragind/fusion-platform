@@ -1,155 +1,324 @@
-# Industrial Sensor Fusion Platform
+# 🛰️ Industrial Sensor Fusion Platform
 
-[![CI](https://github.com/your-org/fusion-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/fusion-platform/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Docker Pulls](https://img.shields.io/docker/pulls/your-org/fusion-platform)](https://hub.docker.com/r/your-org/fusion-platform)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://www.python.org/)
+[![C++](https://img.shields.io/badge/C%2B%2B-17-red)](https://isocpp.org/)
 
-Real‑time sensor fusion for autonomous systems: IMU, GPS, LiDAR, camera, and telemetry combined by an Extended Kalman Filter (C++/Eigen). Designed for production but documented for learners.
+**Production‑ready платформа для сенсорного слияния:** объединяет данные IMU, GPS, лидара, камеры и телеметрии через расширенный фильтр Калмана в реальном времени. Подходит для беспилотников, AGV, подводных аппаратов и промышленной диагностики.
 
-## Features
+---
 
-- **Multi‑sensor fusion** – IMU, GPS, LiDAR/Radar, camera, telemetry via EKF with configurable process/measurement noise.
-- **Time synchronization** – aligns data from asynchronous sources with pluggable NTP/simulation time.
-- **Outlier rejection** – median and 3‑sigma filters before fusion to survive sensor glitches.
-- **Hot‑swappable matrices** – update Q/R online via NATS without restart.
-- **Replay mode** – record raw streams to Parquet and replay at any speed for debugging.
-- **WebSocket streaming** – real‑time fused state pushed to clients.
-- **Full observability** – Prometheus metrics, JSON logs, OpenTelemetry tracing, Grafana dashboards.
-- **Deterministic pipeline** – zero randomness in the fusion core; every run is reproducible.
-- **Production‑grade deployment** – Docker Compose, CI/CD, multi‑arch (amd64 + arm64), resource limits.
+## 📋 Содержание
 
-## Architecture
-Sensors (sim or real)
+- [Возможности](#-возможности)
+- [Архитектура](#-архитектура)
+- [Технологический стек](#-технологический-стек)
+- [Быстрый старт](#-быстрый-старт)
+- [Структура проекта](#-структура-проекта)
+- [API](#-api)
+- [Мониторинг](#-мониторинг)
+- [Replay](#-replay)
+- [Разработка](#-разработка)
+- [Лицензия](#-лицензия)
+
+---
+
+## 🚀 Возможности
+
+- **Multi‑sensor fusion** — IMU, GPS, LiDAR, camera, telemetry через Extended Kalman Filter
+- **C++ ядро** — фильтр Калмана на C++/Eigen с Python‑обёрткой (pybind11)
+- **Time synchronization** — выравнивание асинхронных потоков с настраиваемой задержкой
+- **Outlier rejection** — медианный и 3σ‑фильтр для отсеивания выбросов
+- **Hot‑swappable матрицы** — обновление Q/R матриц без перезапуска
+- **Replay mode** — запись сырых данных в Apache Parquet и воспроизведение с ускорением
+- **REST + WebSocket API** — доступ к fused‑состоянию и стриминг в реальном времени
+- **Live dashboard** — веб‑интерфейс для визуализации в браузере
+- **Prometheus + Grafana** — полная наблюдаемость с метриками и алертами
+- **Production‑grade** — детерминированный пайплайн, Docker, CI/CD ready
+
+---
+
+## 🏗 Архитектура
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     SENSORS (SIM / REAL)                     │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────────┐  │
+│  │ IMU 100Hz│  │ GPS 10Hz │  │ LiDAR    │  │ Telemetry   │  │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──────┬──────┘  │
+└───────┼──────────────┼─────────────┼───────────────┼─────────┘
+        │              │             │               │
+        ▼              ▼             ▼               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    NATS JETSTREAM (MESSAGE BUS)              │
+│              Persistence · Replay · Guaranteed Delivery      │
+└─────────────────────────────────────────────────────────────┘
+        │              │             │               │
+        ▼              ▼             ▼               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    PROCESSING PIPELINE                       │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │
+│  │ Time Sync    │→│ Noise Filter │→│ Kalman (C++/Eigen)│   │
+│  └──────────────┘  └──────────────┘  └──────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      SERVING LAYER                           │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │
+│  │ REST API     │  │ WebSocket    │  │ Live Dashboard   │   │
+│  └──────────────┘  └──────────────┘  └──────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     OBSERVABILITY                            │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │
+│  │ Prometheus   │  │ Grafana      │  │ Alerts           │   │
+│  └──────────────┘  └──────────────┘  └──────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🛠 Технологический стек
+
+| Компонент          | Технологии                                    |
+|-------------------|-----------------------------------------------|
+| **Ядро фильтра**  | C++17, Eigen 3.4, pybind11                    |
+| **Сервисы**       | Python 3.11, FastAPI, NumPy, asyncio          |
+| **Шина сообщений**| NATS JetStream                                |
+| **Replay**        | Apache Parquet, PyArrow                       |
+| **Контейнеры**    | Docker, Docker Compose                        |
+| **Мониторинг**    | Prometheus, Grafana                           |
+| **CI/CD**         | GitHub Actions                                |
+| **Тесты**         | pytest, GoogleTest                            |
+
+---
+
+## ⚡ Быстрый старт
+
+### Предварительные требования
+
+- Python 3.11+
+- Git
+- NATS сервер (локально или удалённо)
+
+### Установка
+
+```bash
+# Клонируйте репозиторий
+git clone https://github.com/bragind/fusion-platform.git
+cd fusion-platform
+
+# Создайте виртуальное окружение
+python -m venv .venv
+source .venv/bin/activate  # Linux/macOS
+# или
+.venv\Scripts\Activate.ps1  # Windows
+
+# Установите зависимости
+pip install -r requirements.txt
+```
+
+### Настройка
+
+Создайте `config.json` в корне проекта:
+
+```json
+{
+    "nats_url": "nats://localhost:4222"
+}
+```
+
+Для удалённого сервера укажите его IP: `"nats://192.168.2.123:4222"`.
+
+### Запуск всей платформы
+
+```bash
+# Windows (открывает отдельные окна PowerShell)
+.\scripts\start_all.ps1
+
+# Linux/macOS (запуск в фоне)
+python sensors/imu_sim.py &
+python sensors/gps_sim.py &
+python processing/time_sync/sync_service.py &
+python processing/noise_filter/outlier_filter.py &
+python replay/recorder.py &
+python replay/controller.py &
+python serving/api.py &
+```
+
+### Проверка
+
+- **REST API:** http://localhost:8002/state
+- **Документация API:** http://localhost:8002/docs
+- **Live Dashboard:** http://localhost:8002
+- **Метрики:** http://localhost:8002/metrics
+
+---
+
+## 📂 Структура проекта
+
+```
+fusion-platform/
+├── sensors/                    # Симуляторы сенсоров
+│   ├── imu_sim.py              #   IMU (100 Гц, акселерометр + гироскоп)
+│   └── gps_sim.py              #   GPS (10 Гц, координаты + точность)
 │
-├── ROS2 nodes / HTTP ingestion
+├── processing/                 # Обработка данных
+│   ├── time_sync/              #   Временная синхронизация
+│   │   └── sync_service.py
+│   ├── noise_filter/           #   Фильтр выбросов (3σ)
+│   │   └── outlier_filter.py
+│   └── kalman/                 #   Фильтр Калмана
+│       ├── kalman_core.cpp     #     C++ ядро (Eigen)
+│       └── fusion_service.py   #     Python обёртка
 │
-└── NATS JetStream message bus
+├── replay/                     # Запись и воспроизведение
+│   ├── recorder.py             #   Запись в Parquet
+│   └── controller.py           #   HTTP API для replay
 │
-├── Time Synchronizer
-├── Noise Filter
-├── Kalman Filter Core (C++/pybind)
-├── Replay Recorder & Controller
+├── serving/                    # API и визуализация
+│   └── api.py                  #   REST + WebSocket + Dashboard
 │
-└── FastAPI Serving (REST + WebSocket)
+├── docker/                     # Docker конфигурация
+│   ├── docker-compose.dev.yml  #   NATS + Prometheus + Grafana
+│   └── prometheus.yml          #   Конфигурация сбора метрик
 │
-└── Prometheus ← Grafana
+├── scripts/                    # Утилиты
+│   └── start_all.ps1           #   Запуск всех сервисов (Windows)
+│
+├── tests/                      # Тесты
+│   └── manual/                 #   Ручные тесты подписчиков
+│
+├── config.json                 # Конфигурация подключений
+├── config_loader.py            # Загрузчик конфигурации
+├── requirements.txt            # Python зависимости
+└── README.md                   # Документация
+```
 
-For a detailed diagram see [docs/architecture.md](docs/architecture.md).
+---
 
-## Tech Stack
+## 📡 API
 
-| Layer          | Technology                                      |
-|----------------|-------------------------------------------------|
-| Fusion core    | C++17, Eigen, pybind11                          |
-| Services       | Python 3.11, FastAPI, NumPy, OpenCV             |
-| Message bus    | NATS (JetStream)                                |
-| Robotics       | ROS2 Humble (optional)                          |
-| Replay storage | Apache Parquet / PyArrow                        |
-| Containers     | Docker, Docker Compose                          |
-| Monitoring     | Prometheus, Grafana, Loki, OpenTelemetry        |
-| CI/CD          | GitHub Actions, pytest, GoogleTest              |
-| Docs           | MkDocs, ADR, OpenAPI                            |
+### REST Endpoints
 
-## Project Structure
-.
-├── sensors/ # Sensor simulators & ROS2 nodes
-├── ingestion/ # ROS2-NATS bridge & FastAPI ingestion
-├── bus/ # NATS configuration
-├── processing/
-│ ├── time_sync/ # Time synchronizer
-│ ├── noise_filter/ # Outlier filter
-│ └── kalman/ # Kalman core (C++ & Python wrapper)
-├── serving/ # FastAPI service (REST + WebSocket)
-├── replay/ # Recorder & replay controller
-├── observability/ # Prometheus, Grafana dashboards
-├── tests/ # Unit, integration, benchmarks
-├── docker/ # Dockerfiles & compose files
-├── docs/ # MkDocs documentation
-├── scripts/ # Utility scripts
-├── CMakeLists.txt # C++ build
-└── pyproject.toml # Python deps
+| Метод | URL | Описание |
+|-------|-----|----------|
+| `GET` | `/state` | Текущее fused‑состояние `[x, y, vx, vy]` |
+| `GET` | `/covariance` | Диагональ матрицы ковариации |
+| `GET` | `/health` | Статус сервиса |
+| `GET` | `/metrics` | Prometheus метрики |
 
-## Quick Start
+### Replay API (порт 8001)
 
-1. Clone the repo:
-   ```bash
-   git clone https://github.com/your-org/fusion-platform.git
-   cd fusion-platform
- 2. Launch the platform:  
-   docker compose -f docker/docker-compose.dev.yml up -d
-3. Verify:
-API docs: http://localhost:8000/docs
+| Метод | URL | Описание |
+|-------|-----|----------|
+| `POST` | `/replay` | Запустить воспроизведение |
+| `GET` | `/health` | Статус контроллера |
 
-Grafana: http://localhost:3000 (admin/admin)
+### WebSocket
 
-Current state: http://localhost:8000/state
-API Examples
-Get fused state
+```javascript
+const ws = new WebSocket('ws://localhost:8002/ws');
+ws.onmessage = (event) => {
+    const state = JSON.parse(event.data);
+    console.log(state.state, state.covariance);
+};
+```
 
-bash
-curl -s http://localhost:8000/state | jq
-Get covariance diagonal
+---
 
-bash
-curl http://localhost:8000/covariance
-Start a replay
+## 📊 Мониторинг
 
-bash
-curl -X POST http://localhost:8000/replay \
+### Prometheus метрики
+
+| Метрика | Тип | Описание |
+|---------|-----|----------|
+| `fusion_latency_seconds` | Histogram | Задержка цикла predict/update |
+| `sensor_drop_total` | Counter | Количество потерянных сообщений |
+| `kalman_innovation_magnitude` | Gauge | Величина инновации фильтра |
+
+### Grafana
+
+1. Откройте http://192.168.2.123:3000 (admin/admin)
+2. Добавьте Data Source → Prometheus (http://prometheus:9090)
+3. Создайте дашборд с графиками:
+   - `rate(fusion_latency_seconds_sum[1m]) / rate(fusion_latency_seconds_count[1m])`
+   - `rate(sensor_drop_total[1m])`
+   - `kalman_innovation_magnitude`
+
+---
+
+## 🔁 Replay
+
+Запись данных происходит автоматически при запущенном Recorder:
+
+```bash
+python replay/recorder.py
+```
+
+Воспроизведение через API:
+
+```bash
+curl -X POST http://localhost:8001/replay \
   -H "Content-Type: application/json" \
-  -d '{"start_time": "2024-01-01T00:00:00Z", "end_time": "2024-01-01T00:01:00Z", "speed": 2.0}'
-WebSocket stream (JavaScript)
+  -d '{"start_time": 1700000000.0, "end_time": 1700000060.0, "speed": 2.0}'
+```
 
-js
-const ws = new WebSocket('ws://localhost:8000/ws');
-ws.onmessage = (e) => console.log(JSON.parse(e.data));
-Documentation
-Full docs are built with MkDocs. To view locally:
+Данные сохраняются в `data/recordings/` в формате Parquet.
 
-bash
-pip install mkdocs mkdocs-material
-mkdocs serve
-Includes: architecture decisions (ADR), Kalman filter tutorial, developer guide, and API reference.
+---
 
-Testing
-Run all tests:
+## 👨‍💻 Разработка
 
-bash
-docker compose -f docker/docker-compose.test.yml up --abort-on-container-exit
-Unit tests: pytest tests/unit (Python) and cd processing/kalman/build && ctest (C++).
+### Ветвление (Git Flow)
 
-Integration tests: pytest tests/integration --docker.
+- `main` — стабильные релизы
+- `develop` — интеграционная ветка
+- `feature/*` — новые возможности
+- `release/*` — подготовка к релизу
+- `hotfix/*` — срочные исправления
 
-Benchmarks: results published as CI artifacts and visualized in Grafana.
+### Сборка C++ модуля
 
-Metrics & Monitoring
-Key metrics exported to Prometheus:
+```bash
+cd processing/kalman
+mkdir build && cd build
+cmake .. -DPython_EXECUTABLE=$(which python)
+make
+```
 
-fusion_latency_seconds – predict/update cycle time
+### Тестирование
 
-sensor_drop_rate – fraction of missed messages
+```bash
+# Python unit-тесты
+pytest tests/
 
-kalman_innovation_magnitude – innovation norm (divergence detection)
+# C++ unit-тесты
+cd processing/kalman/build && ctest
 
-Grafana dashboard “Fusion Overview” shows real‑time plots and alerts.
+# Интеграционные тесты (требуют NATS)
+pytest tests/integration/
+```
 
-Roadmap
-Python EKF prototype
+---
 
-C++ core with pybind11
+## 📄 Лицензия
 
-Parquet replay
+MIT License — см. [LICENSE](LICENSE)
 
-LiDAR odometry integration
+---
 
-Automatic noise covariance tuning
+## 🌟 Благодарности
 
-Jetson (ARM64) deployment
+- [Eigen](https://eigen.tuxfamily.org/) — линейная алгебра
+- [pybind11](https://github.com/pybind/pybind11) — C++/Python мост
+- [NATS](https://nats.io/) — сообщения
+- [FastAPI](https://fastapi.tiangolo.com/) — API фреймворк
+- [Prometheus](https://prometheus.io/) — мониторинг
 
-Kubernetes Helm chart
+---
 
-Contributing
-Pull requests are welcome! See CONTRIBUTING.md for guidelines. Please ensure all tests pass and add new ones for your changes.
-
-License
-This project is licensed under the MIT License – see LICENSE for details.
+*Создано с ❤️ для production и обучения.*
