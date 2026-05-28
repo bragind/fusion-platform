@@ -3,31 +3,30 @@ import json
 import time
 import math
 import random
+import sys
+import os
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from config_loader import get_nats_url
 from nats.aio.client import Client as NATS
 
 async def main():
     nc = NATS()
-    await nc.connect("nats://localhost:4222")
+    await nc.connect(get_nats_url())
 
-    # Параметры симуляции: движение по окружности радиусом 10 м, скорость 1 рад/с
     radius = 10.0
-    omega = 1.0  # угловая скорость рад/с
-    start_time = time.time()
+    omega = 1.0
 
     try:
         while True:
-            t = time.time() - start_time
-            # Истинные ускорения без шума
+            t = time.time()
             true_accel_x = -radius * omega**2 * math.cos(omega * t)
             true_accel_y = -radius * omega**2 * math.sin(omega * t)
-            true_accel_z = 9.81  # сила тяжести
+            true_accel_z = 9.81
 
-            # Добавляем гауссов шум (стандартное отклонение 0.1 м/с²)
             accel_x = true_accel_x + random.gauss(0, 0.1)
             accel_y = true_accel_y + random.gauss(0, 0.1)
             accel_z = true_accel_z + random.gauss(0, 0.1)
-
-            # Гироскоп: угловая скорость вокруг Z плюс шум
             gyro_z = omega + random.gauss(0, 0.01)
 
             message = {
@@ -41,11 +40,11 @@ async def main():
             }
 
             await nc.publish("sensor.imu", json.dumps(message).encode())
-            print(f"Published: {message}")
-            await asyncio.sleep(0.01)  # 100 Hz
+            print(f"IMU published: {message}")
+            await asyncio.sleep(0.01)
 
     except KeyboardInterrupt:
-        print("Simulator stopped")
+        print("IMU simulator stopped")
     finally:
         await nc.close()
 
