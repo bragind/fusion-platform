@@ -1,53 +1,45 @@
 import asyncio
 import json
 import time
+import sys
+import os
 from collections import deque
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+from config_loader import get_nats_url
 from nats.aio.client import Client as NATS
 
-# Хранилище одного измерения с временной меткой
-@dataclass
-class Measurement:
-    timestamp: float
-    data: dict
-
-# Буфер для одного типа сенсора (хранит последние N измерений)
 class SensorBuffer:
-    def __init__(self, max_size: int = 50):
-        self.buffer: deque[Measurement] = deque(maxlen=max_size)
+    def __init__(self, max_size=50):
+        self.buffer = deque(maxlen=max_size)
 
-    def add(self, ts: float, data: dict):
-        self.buffer.append(Measurement(ts, data))
+    def add(self, ts, data):
+        self.buffer.append((ts, data))
 
-    def get_closest(self, target_ts: float) -> Optional[dict]:
-        """Возвращает данные ближайшего измерения к target_ts, если оно не старше 500 мс."""
+    def get_closest(self, target_ts):
         if not self.buffer:
             return None
-        best = min(self.buffer, key=lambda m: abs(m.timestamp - target_ts))
-        # Проверяем, не устарело ли измерение (более 500 мс)
-        if abs(best.timestamp - target_ts) > 0.5:
+        best = min(self.buffer, key=lambda m: abs(m[0] - target_ts))
+        if abs(best[0] - target_ts) > 2.0:
             return None
-        return best.data
+        return best[1]
 
 class TimeSynchronizer:
     def __init__(self):
-        self.buffers: Dict[str, SensorBuffer] = {
+        self.buffers = {
             "imu": SensorBuffer(),
             "gps": SensorBuffer(),
             "lidar": SensorBuffer(),
             "camera": SensorBuffer(),
             "telemetry": SensorBuffer(),
         }
-        self.sync_interval = 0.05  # 50 мс (20 Гц)
 
-    def handle_message(self, subject: str, data: dict):
-        # subject вида "sensor.imu" → sensor_type = "imu"
+    def handle_message(self, subject, data):
         sensor_type = subject.split(".")[-1]
         if sensor_type in self.buffers:
             self.buffers[sensor_type].add(data["timestamp"], data)
 
-    def get_sync_packet(self, sync_ts: float) -> dict:
+    def get_sync_packet(self, sync_ts):
         packet = {"timestamp": sync_ts}
         for s_type, buf in self.buffers.items():
             measurement = buf.get_closest(sync_ts)
@@ -57,33 +49,24 @@ class TimeSynchronizer:
 
 async def main():
     nc = NATS()
-    await nc.connect("nats://localhost:4222")
+    await nc.connect(get_nats_url())
     sync = TimeSynchronizer()
 
-    # Подписываемся на все сенсорные топики
     async def handler(msg):
-        subject = msg.subject
         data = json.loads(msg.data.decode())
-        sync.handle_message(subject, data)
+        sync.handle_message(msg.subject, data)
 
     await nc.subscribe("sensor.*", cb=handler)
 
-    # Периодически публикуем синхронизированный пакет
     async def publish_sync():
         while True:
             sync_ts = time.time()
             packet = sync.get_sync_packet(sync_ts)
             await nc.publish("sync.sensors", json.dumps(packet).encode())
             print(f"Sync packet: {packet}")
-            await asyncio.sleep(sync.sync_interval)
+            await asyncio.sleep(0.05)
 
-    # Запускаем обе задачи параллельно
-    await asyncio.gather(
-        asyncio.create_task(publish_sync()),
-        # Подписка уже работает в фоне через callback
-    )
-
-    # Держим соединение открытым
+    await asyncio.create_task(publish_sync())
     try:
         while True:
             await asyncio.sleep(1)

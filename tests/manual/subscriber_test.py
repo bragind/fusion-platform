@@ -3,7 +3,7 @@ from nats.aio.client import Client as NATS
 
 async def main():
     nc = NATS()
-    await nc.connect("nats://localhost:4222")
+    await nc.connect("nats://192.168.2.123:4222")
 
     async def message_handler(msg):
         print(f"Received: {msg.data.decode()}")

@@ -33,7 +33,7 @@ class LiDARData(BaseModel):
 async def connect_nats():
     global nats_client
     nats_client = NATS()
-    await nats_client.connect("nats://localhost:4222")
+    await nats_client.connect("nats://192.168.2.123:4222")
 
 @app.on_event("shutdown")
 async def disconnect_nats():

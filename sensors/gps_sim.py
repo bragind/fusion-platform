@@ -3,39 +3,32 @@ import json
 import time
 import math
 import random
+import sys
+import os
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from config_loader import get_nats_url
 from nats.aio.client import Client as NATS
 
 async def main():
     nc = NATS()
-    await nc.connect("nats://localhost:4222")
+    await nc.connect(get_nats_url())
 
-    # Параметры движения: такая же окружность, как у IMU
-    radius = 10.0          # метров
-    omega = 1.0            # рад/с
-    # Начальная точка (широта, долгота) – центр Москвы для примера
+    radius = 10.0
+    omega = 1.0
     base_lat = 55.7558
     base_lon = 37.6176
-    # Перевод метров в градусы (грубо)
     lat_per_m = 1 / 111320.0
     lon_per_m = 1 / (111320.0 * math.cos(math.radians(base_lat)))
 
-    start_time = time.time()
-
     try:
         while True:
-            t = time.time() - start_time
-            # Истинное положение на окружности (в метрах от центра)
+            t = time.time()
             dx = radius * math.cos(omega * t)
             dy = radius * math.sin(omega * t)
-            # Пересчитываем в широту/долготу
-            lat = base_lat + dy * lat_per_m
-            lon = base_lon + dx * lon_per_m
-            # Добавляем гауссов шум (σ=3 м)
-            lat += random.gauss(0, 3.0) * lat_per_m
-            lon += random.gauss(0, 3.0) * lon_per_m
-            # Высота (пусть постоянная, тоже с шумом)
+            lat = base_lat + dy * lat_per_m + random.gauss(0, 3.0) * lat_per_m
+            lon = base_lon + dx * lon_per_m + random.gauss(0, 3.0) * lon_per_m
             alt = 150.0 + random.gauss(0, 5.0)
-            # EPH – оценка точности по горизонтали в метрах
             eph = 3.0
 
             message = {
@@ -48,7 +41,7 @@ async def main():
 
             await nc.publish("sensor.gps", json.dumps(message).encode())
             print(f"GPS published: {message}")
-            await asyncio.sleep(0.1)  # 10 Гц (типичная частота GPS)
+            await asyncio.sleep(0.1)
 
     except KeyboardInterrupt:
         print("GPS simulator stopped")
